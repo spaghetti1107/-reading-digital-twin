@@ -1,7 +1,14 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+# ============================================================
+# LOAD SHAP BIOMARKER IMPORTANCE
+# ============================================================
 
+try:
+    shap_df = pd.read_csv("SHAP_biomarker_importance.csv")
+except:
+    shap_df = None
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
@@ -215,7 +222,55 @@ st.dataframe(
 # ============================================================
 # READING SPEED
 # ============================================================
+# ============================================================
+# EXPLAINABLE AI — BIOMARKER IMPORTANCE
+# ============================================================
 
+st.header("🔍 Explainable AI — Key Reading Biomarkers")
+
+if shap_df is not None:
+
+    shap_display = shap_df.copy()
+
+    shap_display.columns = [
+        "Biomarker",
+        "Mean Absolute SHAP"
+    ]
+
+    shap_display = shap_display.sort_values(
+        "Mean Absolute SHAP",
+        ascending=False
+    )
+
+    # Top biomarkers
+    top_biomarkers = shap_display.head(10)
+
+    st.markdown(
+        """
+        The Explainable AI module identifies the eye-tracking
+        biomarkers that contribute most strongly to the
+        machine-learning model's predictions.
+        """
+    )
+
+    st.dataframe(
+        top_biomarkers,
+        use_container_width=True
+    )
+
+    st.subheader("Top 5 Influential Biomarkers")
+
+    st.bar_chart(
+        top_biomarkers.head(5).set_index(
+            "Biomarker"
+        )
+    )
+
+else:
+
+    st.info(
+        "SHAP biomarker importance data not available."
+    )
 st.header("📖 Reading Speed")
 
 if reading_speed_df is not None:
@@ -406,9 +461,143 @@ for observation in observations:
         observation
     )
 
+# ============================================================
+# PERSONALIZED INTERVENTION & DECISION SUPPORT
+# ============================================================
 
-st.subheader(
-    "Suggested Intervention"
+st.header("🎯 Personalized Intervention")
+
+st.markdown(
+    """
+    The intervention module converts the child's observed
+    reading biomarkers into targeted reading-support strategies.
+    """
+)
+
+for i, recommendation in enumerate(
+    recommendations,
+    1
+):
+
+    st.success(
+        f"**Intervention {i}:** {recommendation}"
+    )
+
+
+# ============================================================
+# DECISION SUPPORT FOR THERAPISTS / EDUCATORS
+# ============================================================
+
+st.header("🧑‍🏫 Therapist & Educator Decision Support")
+
+st.markdown(
+    """
+    ### Personalized Reading Summary
+    """
+)
+
+# Determine profile characteristics
+
+high_fixation = []
+high_regression = []
+
+for task in ["T1", "T4", "T5"]:
+
+    fix_feature = f"mean_fix_dur_trial_{task}"
+    reg_feature = f"n_regress_trial_{task}"
+
+    if child[fix_feature] > df[fix_feature].quantile(0.75):
+        high_fixation.append(task)
+
+    if child[reg_feature] > df[reg_feature].quantile(0.75):
+        high_regression.append(task)
+
+
+# Display decision support
+
+if len(high_fixation) > 0:
+
+    st.warning(
+        "⚠️ Elevated fixation duration detected in: "
+        + ", ".join(high_fixation)
+    )
+
+else:
+
+    st.success(
+        "✓ Fixation duration is within the reference range."
+    )
+
+
+if len(high_regression) > 0:
+
+    st.warning(
+        "⚠️ Elevated regression frequency detected in: "
+        + ", ".join(high_regression)
+    )
+
+else:
+
+    st.success(
+        "✓ Regression frequency is within the reference range."
+    )
+
+
+# ============================================================
+# RECOMMENDED FOCUS AREAS
+# ============================================================
+
+st.subheader("Recommended Focus Areas")
+
+focus_areas = []
+
+if len(high_fixation) > 0:
+
+    focus_areas.append(
+        "Reading fluency and fixation efficiency"
+    )
+
+if len(high_regression) > 0:
+
+    focus_areas.append(
+        "Guided reading and reduction of unnecessary regressions"
+    )
+
+if len(focus_areas) == 0:
+
+    focus_areas.append(
+        "Continue reading-fluency practice and monitor performance"
+    )
+
+
+for area in focus_areas:
+
+    st.write(
+        "• " + area
+    )
+
+
+# ============================================================
+# DIGITAL TWIN SUMMARY
+# ============================================================
+
+st.header("🧠 Personalized Reading Digital Twin")
+
+st.markdown(
+    f"""
+    **Child ID:** {selected_child}
+
+    **ML Reading Profile:** {"Dyslexic" if prediction == 1 else "Non-dyslexic"}
+
+    **Model-estimated dyslexic-class probability:** {probability * 100:.1f}%
+
+    **Eye-tracking tasks analyzed:** T1, T4 and T5
+
+    The digital twin represents this child's reading behavior
+    using individualized eye-tracking biomarkers, reading speed,
+    fixation behavior, regression behavior and saccadic measures.
+    """
+)
 )
 
 for i, recommendation in enumerate(
