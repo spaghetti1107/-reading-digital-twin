@@ -598,7 +598,7 @@ st.markdown(
     fixation behavior, regression behavior and saccadic measures.
     """
 )
-)
+
 
 for i, recommendation in enumerate(
     recommendations,
