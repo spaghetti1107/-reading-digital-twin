@@ -41,30 +41,24 @@ st.set_page_config(
     layout="wide"
 )
 
-# ============================================================
+# =========================
 # LOAD DATA
-# ============================================================
+# =========================
 
 df = pd.read_csv("ETDD70_features_enhanced.csv")
 
+# Separate features from target
 X = df.drop(
     columns=["subject_id", "class_id", "label"]
 )
 
+# Keep only numerical ML features
 X = X.select_dtypes(include=[np.number])
 
-y = df["label"]
-
-if y.dtype == "object":
-    y = (
-        y.astype(str)
-        .str.strip()
-        .str.lower()
-        .map({
-            "non-dyslexic": 0,
-            "dyslexic": 1
-        })
-    )
+# Binary target
+# 0 = Non-Dyslexic
+# 1 = Dyslexic
+y = df["class_id"].astype(int)
 # ============================================================
 # READING SPEED
 # ============================================================
@@ -105,59 +99,43 @@ final_svm.fit(X, y)
 @st.cache_data
 def calculate_model_performance():
 
+    # Load enhanced dataset
     df = pd.read_csv("ETDD70_features_enhanced.csv")
 
-    # Get labels
-    y = df["label"]
-
-    # Convert text labels to binary labels if necessary
-    if y.dtype == "object":
-        y = (
-            y.astype(str)
-            .str.strip()
-            .str.lower()
-            .map({
-                "non-dyslexic": 0,
-                "dyslexic": 1
-            })
-        )
+    # Binary target:
+    # 0 = Non-Dyslexic
+    # 1 = Dyslexic
+    y = df["class_id"].astype(int)
 
     # Remove non-feature columns
-    columns_to_drop = [
-        "subject_id",
-        "class_id",
-        "label"
-    ]
-
     X = df.drop(
-        columns=[c for c in columns_to_drop if c in df.columns],
-        errors="ignore"
+        columns=["subject_id", "class_id", "label"]
     )
 
     # Keep only numerical features
     X = X.select_dtypes(include=[np.number])
 
-    # SVM pipeline
-    svm_model = Pipeline([
-        ("imputer", SimpleImputer(strategy="median")),
-        ("scaler", StandardScaler()),
-        ("classifier", SVC(
-            kernel="rbf",
-            probability=True,
-            random_state=42
-        ))
-    ])
-
-    # 5-fold stratified cross-validation
+    # Cross-validation
     cv = StratifiedKFold(
         n_splits=5,
         shuffle=True,
         random_state=42
     )
 
+    # SVM pipeline
+    model = Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler()),
+        ("svm", SVC(
+            kernel="rbf",
+            probability=True,
+            random_state=42
+        ))
+    ])
+
     # Out-of-fold predictions
     y_pred = cross_val_predict(
-        svm_model,
+        model,
         X,
         y,
         cv=cv,
@@ -166,7 +144,7 @@ def calculate_model_performance():
 
     # Out-of-fold probabilities
     y_prob = cross_val_predict(
-        svm_model,
+        model,
         X,
         y,
         cv=cv,
@@ -175,35 +153,39 @@ def calculate_model_performance():
 
     # Performance metrics
     accuracy = accuracy_score(y, y_pred)
-
     precision = precision_score(
         y,
         y_pred,
         pos_label=1,
         zero_division=0
     )
-
     recall = recall_score(
         y,
         y_pred,
         pos_label=1,
         zero_division=0
     )
-
     f1 = f1_score(
         y,
         y_pred,
         pos_label=1,
         zero_division=0
     )
-
     roc_auc = roc_auc_score(y, y_prob)
 
     # Confusion matrix
-    cm = confusion_matrix(y, y_pred)
+    cm = confusion_matrix(
+        y,
+        y_pred,
+        labels=[0, 1]
+    )
 
     # ROC curve
-    fpr, tpr, _ = roc_curve(y, y_prob)
+    fpr, tpr, thresholds = roc_curve(
+        y,
+        y_prob,
+        pos_label=1
+    )
 
     return {
         "accuracy": accuracy,
@@ -213,9 +195,12 @@ def calculate_model_performance():
         "roc_auc": roc_auc,
         "confusion_matrix": cm,
         "fpr": fpr,
-        "tpr": tpr
+        "tpr": tpr,
+        "thresholds": thresholds,
+        "y_true": y,
+        "y_pred": y_pred,
+        "y_prob": y_prob
     }
-
 # ============================================================
 # TITLE
 # ============================================================
