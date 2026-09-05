@@ -54,6 +54,17 @@ X = df.drop(
 X = X.select_dtypes(include=[np.number])
 
 y = df["label"]
+
+if y.dtype == "object":
+    y = (
+        y.astype(str)
+        .str.strip()
+        .str.lower()
+        .map({
+            "non-dyslexic": 0,
+            "dyslexic": 1
+        })
+    )
 # ============================================================
 # READING SPEED
 # ============================================================
@@ -96,7 +107,19 @@ def calculate_model_performance():
 
     df = pd.read_csv("ETDD70_features_enhanced.csv")
 
-    y = df["label"]
+   y = df["label"]
+
+# Convert text labels to binary labels
+if y.dtype == "object":
+    y = (
+        y.astype(str)
+        .str.strip()
+        .str.lower()
+        .map({
+            "non-dyslexic": 0,
+            "dyslexic": 1
+        })
+    )
 
     columns_to_drop = [
         "subject_id",
@@ -143,10 +166,23 @@ def calculate_model_performance():
         method="predict_proba"
     )[:, 1]
 
-    accuracy = accuracy_score(y, y_pred)
-    precision = precision_score(y, y_pred, zero_division=0)
-    recall = recall_score(y, y_pred, zero_division=0)
-    f1 = f1_score(y, y_pred, zero_division=0)
+  precision = precision_score(
+    y, y_pred,
+    pos_label=1,
+    zero_division=0
+)
+
+recall = recall_score(
+    y, y_pred,
+    pos_label=1,
+    zero_division=0
+)
+
+f1 = f1_score(
+    y, y_pred,
+    pos_label=1,
+    zero_division=0
+)
     roc_auc = roc_auc_score(y, y_prob)
 
     cm = confusion_matrix(y, y_pred)
