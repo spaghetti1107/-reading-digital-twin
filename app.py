@@ -1,6 +1,23 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import StratifiedKFold, cross_val_predict
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score,
+    confusion_matrix,
+    roc_curve
+)
 # ============================================================
 # LOAD SHAP BIOMARKER IMPORTANCE
 # ============================================================
@@ -28,14 +45,15 @@ st.set_page_config(
 # LOAD DATA
 # ============================================================
 
-df = pd.read_csv("ETDD70_features.csv")
+df = pd.read_csv("ETDD70_features_enhanced.csv")
 
 X = df.drop(
     columns=["subject_id", "class_id", "label"]
 )
 
-y = df["class_id"]
+X = X.select_dtypes(include=[np.number])
 
+y = df["label"]
 # ============================================================
 # READING SPEED
 # ============================================================
@@ -73,7 +91,78 @@ final_svm = Pipeline([
 ])
 
 final_svm.fit(X, y)
+@st.cache_data
+def calculate_model_performance():
 
+    df = pd.read_csv("ETDD70_features_enhanced.csv")
+
+    y = df["label"]
+
+    columns_to_drop = [
+        "subject_id",
+        "class_id",
+        "label"
+    ]
+
+    X = df.drop(
+        columns=[c for c in columns_to_drop if c in df.columns],
+        errors="ignore"
+    )
+
+    X = X.select_dtypes(include=[np.number])
+
+    svm_model = Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler()),
+        ("classifier", SVC(
+            kernel="rbf",
+            probability=True,
+            random_state=42
+        ))
+    ])
+
+    cv = StratifiedKFold(
+        n_splits=5,
+        shuffle=True,
+        random_state=42
+    )
+
+    y_pred = cross_val_predict(
+        svm_model,
+        X,
+        y,
+        cv=cv,
+        method="predict"
+    )
+
+    y_prob = cross_val_predict(
+        svm_model,
+        X,
+        y,
+        cv=cv,
+        method="predict_proba"
+    )[:, 1]
+
+    accuracy = accuracy_score(y, y_pred)
+    precision = precision_score(y, y_pred, zero_division=0)
+    recall = recall_score(y, y_pred, zero_division=0)
+    f1 = f1_score(y, y_pred, zero_division=0)
+    roc_auc = roc_auc_score(y, y_prob)
+
+    cm = confusion_matrix(y, y_pred)
+
+    fpr, tpr, _ = roc_curve(y, y_prob)
+
+    return {
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "roc_auc": roc_auc,
+        "confusion_matrix": cm,
+        "fpr": fpr,
+        "tpr": tpr
+    }
 
 # ============================================================
 # TITLE
@@ -460,6 +549,140 @@ for observation in observations:
     st.info(
         observation
     )
+# SHAP section
+
+...
+
+# ============================================================
+# MODEL PERFORMANCE
+# ============================================================
+
+st.markdown("---")
+
+st.header("📊 Model Performance")
+
+st.write(
+    "Performance of the SVM classifier evaluated using "
+    "stratified 5-fold out-of-fold predictions."
+)
+
+performance = calculate_model_performance()
+
+col1, col2, col3, col4, col5 = st.columns(5)
+
+with col1:
+    st.metric(
+        "Accuracy",
+        f"{performance['accuracy'] * 100:.1f}%"
+    )
+
+with col2:
+    st.metric(
+        "Precision",
+        f"{performance['precision'] * 100:.1f}%"
+    )
+
+with col3:
+    st.metric(
+        "Recall",
+        f"{performance['recall'] * 100:.1f}%"
+    )
+
+with col4:
+    st.metric(
+        "F1 Score",
+        f"{performance['f1'] * 100:.1f}%"
+    )
+
+with col5:
+    st.metric(
+        "ROC-AUC",
+        f"{performance['roc_auc']:.3f}"
+    )
+
+
+col1, col2 = st.columns(2)
+
+with col1:
+
+    st.subheader("Confusion Matrix")
+
+    cm = performance["confusion_matrix"]
+
+    fig, ax = plt.subplots(figsize=(5, 4))
+
+    im = ax.imshow(cm)
+
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
+    ax.set_title("SVM Confusion Matrix")
+
+    ax.set_xticks([0, 1])
+    ax.set_yticks([0, 1])
+
+    ax.set_xticklabels([
+        "Non-Dyslexic",
+        "Dyslexic"
+    ])
+
+    ax.set_yticklabels([
+        "Non-Dyslexic",
+        "Dyslexic"
+    ])
+
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(
+                j,
+                i,
+                cm[i, j],
+                ha="center",
+                va="center",
+                fontsize=16
+            )
+
+    fig.colorbar(im, ax=ax)
+
+    st.pyplot(fig)
+
+
+with col2:
+
+    st.subheader("ROC Curve")
+
+    fpr = performance["fpr"]
+    tpr = performance["tpr"]
+
+    fig, ax = plt.subplots(figsize=(5, 4))
+
+    ax.plot(
+        fpr,
+        tpr,
+        linewidth=2,
+        label=f"SVM (AUC = {performance['roc_auc']:.3f})"
+    )
+
+    ax.plot(
+        [0, 1],
+        [0, 1],
+        linestyle="--",
+        label="Random Classifier"
+    )
+
+    ax.set_xlabel("False Positive Rate")
+    ax.set_ylabel("True Positive Rate")
+    ax.set_title("ROC Curve")
+
+    ax.legend()
+
+    st.pyplot(fig)
+
+
+st.info(
+    "Evaluation uses stratified 5-fold out-of-fold predictions. "
+    "These results represent research-model performance and "
+    "should not be interpreted as clinical diagnostic accuracy."
+)
 
 # ============================================================
 # PERSONALIZED INTERVENTION & DECISION SUPPORT
