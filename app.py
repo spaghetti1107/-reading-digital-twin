@@ -107,20 +107,22 @@ def calculate_model_performance():
 
     df = pd.read_csv("ETDD70_features_enhanced.csv")
 
-   y = df["label"]
+    # Get labels
+    y = df["label"]
 
-# Convert text labels to binary labels
-if y.dtype == "object":
-    y = (
-        y.astype(str)
-        .str.strip()
-        .str.lower()
-        .map({
-            "non-dyslexic": 0,
-            "dyslexic": 1
-        })
-    )
+    # Convert text labels to binary labels if necessary
+    if y.dtype == "object":
+        y = (
+            y.astype(str)
+            .str.strip()
+            .str.lower()
+            .map({
+                "non-dyslexic": 0,
+                "dyslexic": 1
+            })
+        )
 
+    # Remove non-feature columns
     columns_to_drop = [
         "subject_id",
         "class_id",
@@ -132,8 +134,10 @@ if y.dtype == "object":
         errors="ignore"
     )
 
+    # Keep only numerical features
     X = X.select_dtypes(include=[np.number])
 
+    # SVM pipeline
     svm_model = Pipeline([
         ("imputer", SimpleImputer(strategy="median")),
         ("scaler", StandardScaler()),
@@ -144,12 +148,14 @@ if y.dtype == "object":
         ))
     ])
 
+    # 5-fold stratified cross-validation
     cv = StratifiedKFold(
         n_splits=5,
         shuffle=True,
         random_state=42
     )
 
+    # Out-of-fold predictions
     y_pred = cross_val_predict(
         svm_model,
         X,
@@ -158,6 +164,7 @@ if y.dtype == "object":
         method="predict"
     )
 
+    # Out-of-fold probabilities
     y_prob = cross_val_predict(
         svm_model,
         X,
@@ -166,27 +173,36 @@ if y.dtype == "object":
         method="predict_proba"
     )[:, 1]
 
-  precision = precision_score(
-    y, y_pred,
-    pos_label=1,
-    zero_division=0
-)
+    # Performance metrics
+    accuracy = accuracy_score(y, y_pred)
 
-recall = recall_score(
-    y, y_pred,
-    pos_label=1,
-    zero_division=0
-)
+    precision = precision_score(
+        y,
+        y_pred,
+        pos_label=1,
+        zero_division=0
+    )
 
-f1 = f1_score(
-    y, y_pred,
-    pos_label=1,
-    zero_division=0
-)
+    recall = recall_score(
+        y,
+        y_pred,
+        pos_label=1,
+        zero_division=0
+    )
+
+    f1 = f1_score(
+        y,
+        y_pred,
+        pos_label=1,
+        zero_division=0
+    )
+
     roc_auc = roc_auc_score(y, y_prob)
 
+    # Confusion matrix
     cm = confusion_matrix(y, y_pred)
 
+    # ROC curve
     fpr, tpr, _ = roc_curve(y, y_prob)
 
     return {
